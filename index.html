@@ -476,10 +476,15 @@ function altUrl(u){
   var m = u.match(/^https:\/\/script\.google\.com\/a\/macros\/[^\/]+\/s\/([\w-]+)\/exec$/);
   return m ? 'https://script.google.com/macros/s/' + m[1] + '/exec' : null;
 }
+var SIGNIN_MSG = 'Google is asking for a company sign-in, so the app can’t reach your sheet. In Apps Script open Deploy → Manage deployments → ✏️ and set "Who has access" to "Anyone" (not "Anyone within…"). If "Anyone" isn’t offered, use a copy of the sheet on your personal Gmail.';
 function post(url, body){
   return fetch(url, { method: 'POST', body: body, redirect: 'follow' }).then(function(r){
     return r.text().then(function(txt){ var j; try { j = JSON.parse(txt); } catch(e){ j = null; } return { j: j, txt: txt }; });
-  }, function(){ throw mkErr('No internet. Changes will save when you’re back online.', 'net'); });
+  }, function(){
+    // A blocked request (Google sign-in page) looks like a network failure to the browser. Tell them apart.
+    if (navigator.onLine === false) throw mkErr('No internet. Changes will save when you’re back online.', 'net');
+    return { j: null, txt: '', blocked: true };
+  });
 }
 function api(fn){
   var args = Array.prototype.slice.call(arguments, 1);
@@ -490,8 +495,8 @@ function api(fn){
     if (!res.j && alt) return post(alt, body).then(function(r2){ if (r2.j) { CFG.url = alt; save('ember-cfg', CFG); } return r2; });
     return res;
   }).then(function(res){
-    if (!res.j) throw mkErr(/accounts\.google|signin|ServiceLogin/i.test(res.txt)
-      ? 'Google asked for a sign-in. In Apps Script open Deploy → Manage deployments → ✏️ and set "Who has access" to "Anyone", then Deploy.'
+    if (!res.j && res.blocked && OPS.length && S) throw mkErr('Can’t reach your sheet right now. Changes will save when it’s reachable.', 'net');
+    if (!res.j) throw mkErr(res.blocked || /accounts\.google|signin|ServiceLogin/i.test(res.txt) ? SIGNIN_MSG
       : 'The link didn’t answer like the Ember connector. Copy the Web app link again from Apps Script.', 'setup');
     if (!res.j.ok) throw mkErr(res.j.error || 'The sheet refused that change.', /PIN/i.test(res.j.error || '') ? 'pin' : 'server');
     return res.j.data;
