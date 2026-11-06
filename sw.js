@@ -1,6 +1,6 @@
 // Ember service worker: keeps the app itself available offline. Your data never passes through here
 // (the sheet is reached with POST requests, which this worker ignores).
-const CACHE = 'ember-v4';
+const CACHE = 'ember-v5';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png'];
 
 self.addEventListener('install', e => {
@@ -15,9 +15,9 @@ self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  // App pages: network first so updates arrive, cache when offline.
+  // App pages: always ask GitHub for the newest copy (skipping the browser's 10-minute cache); use the saved copy only when offline.
   if (url.origin === location.origin) {
-    e.respondWith(fetch(req).then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); return res; })
+    e.respondWith(fetch(req, { cache: 'no-cache' }).then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); return res; })
       .catch(() => caches.match(req).then(r => r || caches.match('./index.html'))));
     return;
   }

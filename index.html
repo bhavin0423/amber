@@ -1075,7 +1075,7 @@ document.addEventListener('keydown', function(e){ if ($('#pinStep').hidden || $(
 
 /* ================= boot ================= */
 sizeSky(); kick();
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(function(){});
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function(reg){ reg.update(); }).catch(function(){});
 if (!CFG.url) showLock('setup');
 else if (!CFG.pin) showLock('pin');
 if (S) { recompute(); ANIM = true; render(); ANIM = false; }
