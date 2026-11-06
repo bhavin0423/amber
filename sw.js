@@ -1,6 +1,6 @@
 // Ember service worker: keeps the app itself available offline. Your data never passes through here
 // (the sheet is reached with POST requests, which this worker ignores).
-const CACHE = 'ember-v3';
+const CACHE = 'ember-v4';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png'];
 
 self.addEventListener('install', e => {

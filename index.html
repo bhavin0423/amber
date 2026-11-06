@@ -469,21 +469,33 @@ function rise(i){ return ANIM ? ' rise" style="--i:' + Math.min(i, 10) : ''; }  
 function TODAY(){ return (S && S.today) || todayYMD(); }
 
 /* ================= server ================= */
+// Accepts both link styles: personal  https://script.google.com/macros/s/ID/exec
+//                           Workspace https://script.google.com/a/macros/DOMAIN/s/ID/exec
+var SCRIPT_RE = /^https:\/\/script\.google\.com\/(a\/macros\/[^\/\s]+|macros)\/s\/[\w-]+\/exec\/?$/;
+function altUrl(u){
+  var m = u.match(/^https:\/\/script\.google\.com\/a\/macros\/[^\/]+\/s\/([\w-]+)\/exec$/);
+  return m ? 'https://script.google.com/macros/s/' + m[1] + '/exec' : null;
+}
+function post(url, body){
+  return fetch(url, { method: 'POST', body: body, redirect: 'follow' }).then(function(r){
+    return r.text().then(function(txt){ var j; try { j = JSON.parse(txt); } catch(e){ j = null; } return { j: j, txt: txt }; });
+  }, function(){ throw mkErr('No internet. Changes will save when you’re back online.', 'net'); });
+}
 function api(fn){
   var args = Array.prototype.slice.call(arguments, 1);
   if (!CFG.url) return Promise.reject(mkErr('Connect your sheet first.', 'setup'));
-  return fetch(CFG.url, { method: 'POST', body: JSON.stringify({ pin: CFG.pin, fn: fn, args: args }), redirect: 'follow' })
-    .then(function(r){
-      return r.text().then(function(txt){
-        var j; try { j = JSON.parse(txt); } catch(e){
-          throw mkErr(/accounts\.google|signin|ServiceLogin/i.test(txt)
-            ? 'Google asked for a sign-in. In Apps Script, set "Who has access" to "Anyone" and redeploy.'
-            : 'The link didn’t answer like the Ember connector. Check you pasted the /exec link.', 'setup');
-        }
-        if (!j.ok) throw mkErr(j.error || 'The sheet refused that change.', /PIN/i.test(j.error || '') ? 'pin' : 'server');
-        return j.data;
-      });
-    }, function(){ throw mkErr('No internet. Changes will save when you’re back online.', 'net'); });
+  var body = JSON.stringify({ pin: CFG.pin, fn: fn, args: args });
+  return post(CFG.url, body).then(function(res){
+    var alt = altUrl(CFG.url);
+    if (!res.j && alt) return post(alt, body).then(function(r2){ if (r2.j) { CFG.url = alt; save('ember-cfg', CFG); } return r2; });
+    return res;
+  }).then(function(res){
+    if (!res.j) throw mkErr(/accounts\.google|signin|ServiceLogin/i.test(res.txt)
+      ? 'Google asked for a sign-in. In Apps Script open Deploy → Manage deployments → ✏️ and set "Who has access" to "Anyone", then Deploy.'
+      : 'The link didn’t answer like the Ember connector. Copy the Web app link again from Apps Script.', 'setup');
+    if (!res.j.ok) throw mkErr(res.j.error || 'The sheet refused that change.', /PIN/i.test(res.j.error || '') ? 'pin' : 'server');
+    return res.j.data;
+  });
 }
 function mkErr(msg, kind){ var e = new Error(msg); e.kind = kind; return e; }
 
@@ -1032,7 +1044,7 @@ function hideLock(){ var L = $('#lock'); L.classList.add('out'); setTimeout(func
 function dots(){ var n = Math.max(4, pin.length); $('#pinDots').innerHTML = Array.apply(null, Array(n)).map(function(_, i){ return '<i class="' + (i < pin.length ? 'on' : '') + '"></i>'; }).join(''); }
 $('#setupForm').addEventListener('submit', function(e){
   e.preventDefault(); var u = $('#setupUrl').value.trim();
-  if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec\/?$/.test(u)) { $('#setupErr').textContent = 'That doesn’t look right. It should start with https://script.google.com/macros/s/ and end with /exec'; buzz(30); return; }
+  if (!SCRIPT_RE.test(u)) { $('#setupErr').textContent = 'That doesn’t look right. Copy the Web app link from Apps Script (Deploy → Manage deployments). It starts with https://script.google.com/ and ends with /exec'; buzz(30); return; }
   CFG.url = u.replace(/\/$/, ''); save('ember-cfg', CFG); showLock('pin');
 });
 $('#keypad').addEventListener('click', function(e){
